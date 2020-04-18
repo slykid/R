@@ -106,6 +106,13 @@ ggplot(data[!is.na(data$Survived),], aes(Survived, Fare)) +
   theme(plot.title = element_text(face="bold", hjust=0.5, size=15))
 
 ## 3) 전처리
+### (1) Fare
+### - Fare 변수의 경우 na 값이 존재하는 데 금액이라는 수치형 변수이므로 NA를 0으로 변경
+data$Fare <- replace(data$Fare, which(is.na(data$Fare)), 0)
 
+### (2) Embarked
+### - Embarked 변수의 경우 2개의 NA 값이 있으며, 나머지 범주 중에서 최빈값으로 포함시킴
+data$Embarked <- replace(data$Embarked, which(is.na(data$Embarked)), 
+                         names(table(data$Embarked)[which.max(table(data$Embarked))]))
 
 
