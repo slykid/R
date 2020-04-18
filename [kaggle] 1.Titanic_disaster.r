@@ -1,106 +1,111 @@
-setwd("D:/workspace/R")
+# ì°¸ê³ ìë£Œ
+# - https://www.kaggle.com/redhorse93/r-titanic-data
+# - https://velog.io/@suzin/R-%EB%8D%B0%EC%9D%B4%ED%84%B0-%ED%83%90%EC%83%89-3.-Missing-Value%EA%B2%B0%EC%B8%A1%EC%B9%98-NA
+# - https://wsyang.com/2014/02/introduction-to-dplyr/
 
-train <- read.csv("Data/titanic/train.csv", stringsAsFactors = F)
-test <- read.csv("Data/titanic/test.csv", stringsAsFactors = F)
+# ì‚¬ìš©í•  ë¼ì´ë¸ŒëŸ¬ë¦¬
+#install.packages("dplyr","ggplot2","naniar", "VIM","sqldf")
 
-# µ¥ÀÌÅÍ Å½»ö
-str(train)
-str(test)
+library(dplyr)
+library(ggplot2)
+library(naniar)
+library(VIM)
+library(sqldf)
 
-# µ¥ÀÌÅÍ ÀüÃ³¸®
-# Survived, Pclass, Sex, Embarked 4°³ ÄÃ·³Àº ¹üÁÖÇü º¯¼öÀÌ¹Ç·Î factor ÇüÀ¸·Î º¯È¯ÇØÁØ´Ù.
-train$Survived <- factor(train$Survived, levels=c(0, 1), labels=c("dead", "survived"))
-train$Pclass <- as.factor(train$Pclass)
-train$Sex <- as.factor(train$Sex)
-train$Embarked <- as.factor(train$Embarked)
+# 1. ì›ë³¸ ë°ì´í„° ë¡œë“œ
+train_data <- read.csv("Data/titanic/train.csv")
+test_data <- read.csv("Data/titanic/test.csv")
 
-str(train)
-str(test)
+## ë°ì´í„° í™•ì¸
+str(train_data)
+str(test_data)
 
-# ÆÑÅÍÇüÀ¸·Î º¯È¯µÈ Embarked ¿¡  "" °ªÀÌ Á¸ÀçÇÏ´Â °ÍÀ» È®ÀÎ
-# label °ªÀÎ "" À» NA ·Î º¯È¯ ÇÊ¿ä
-levels(train$Embarked)[1] <- NA
-table(train$Embarked, useNA="always")
-#   C    Q    S   <NA> 
-#  168   77  644    2
+## ë°ì´í„° í†µí•© ì‘ì—…
+## - train, test ëª¨ë‘ ì „ì²˜ë¦¬ê°€ í•„ìš”í•  ê²½ìš°ë¥¼ ëŒ€ë¹„í•˜ì—¬ í•œ ë²ˆì— ìˆ˜í–‰í•˜ê¸° ìœ„í•œ í†µí•©ë°ì´í„° ìƒì„±
+## - test ì˜ ê²½ìš° ì˜ˆì¸¡ë³€ìˆ˜ì¸ Survived ê°€ ì—†ê¸° ë•Œë¬¸ì— Survived ë³€ìˆ˜ë¥¼ ë§Œë“¤ì–´ ì£¼ëŠ” ëŒ€ì‹  NAë¡œ ì±„ì›Œì¤€ë‹¤.
+##   ë°©ë²•ë¡ 
+##   - test_data ìª½ì— Survived ë³€ìˆ˜ë¥¼ ë§Œë“¤ê³  NAë¥¼ ì±„ì›Œì¤€ í›„ í•™ìŠµ ë°ì´í„°ì™€ ë³‘í•©í•œë‹¤.
+Survived <- rep(NA, nrow(test_data))
+test_data_prep <- cbind(test_data, Survived)
+data <- rbind(train_data, test_data_prep)
+str(data)
+summary(data)
 
-# Embarked »Ó¸¸ ¾Æ´Ï¶ó cabin ¿¡µµ "" °ªÀÌ Á¸ÀçÇÏ±â ¶§¹®¿¡ Ã³¸®ÇØÁØ´Ù.
-train$Cabin <- ifelse(train$Cabin=="", NA, train$Cabin)
-str(train$Cabin)
-# chr [1:891] NA "C85" NA "C123" NA NA "E46" NA NA ...
-
-# Å×½ºÆ® µ¥ÀÌÅÍµµ µ¿ÀÏÇÏ°Ô Àû¿ë
-# Survived ´Â ¾øÀ¸¹Ç·Î ÇØ´ç °úÁ¤¸¸ Á¦¿Ü
-test$Pclass <- as.factor(test$Pclass)
-test$Sex <- as.factor(test$Sex)
-test$Embarked <- as.factor(test$Embarked)
-
-str(test)
-
-test$Cabin <- ifelse(test$Cabin=="", NA, test$Cabin)
+##   - dplyr ë¼ì´ë¸ŒëŸ¬ë¦¬ì˜ bind_rows()ë¥¼ ì‚¬ìš©í•˜ë©´ ì—†ëŠ” ë³€ìˆ˜ì— ëŒ€í•´ì„œëŠ” NAë¥¼ ìë™ìœ¼ë¡œ ì±„ì›Œì¤Œ
+data <- dplyr::bind_rows(train_data, test_data)
+str(data)
+summary(data)
 
 
-# »ıÁ¸-»ç¸Á ºñÁß È®ÀÎ
-prop.table(table(train$Survived))
-#     dead  survived 
-#0.6161616 0.3838384
-
-summary(train)
-
-# Å×½ºÆ® µ¥ÀÌÅÍ º¯È¯
-test$Pclass <- as.factor(test$Pclass)
-test$Sex <- as.factor(test$Sex)
-test$Embarked <- as.factor(test$Embarked)
-levels(test$Embarked)[1] <- NA
-test$Cabin <- ifelse(test$Cabin == "", NA, test$Cabin)
-
-# µ¥ÀÌÅÍ ¿ä¾à È®ÀÎ
-#install.packages("Hmisc")
-library(Hmisc)
-
-names(train)
-summary(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data=train, method="reverse")
+# 2. ë°ì´í„° ì „ì²˜ë¦¬
+## ë³€ìˆ˜ ì†ì„± ë³€í™˜
+data$Survived <- factor(data$Survived)
+data$Pclass <- factor(data$Pclass, ordered = T)
+data$Sex <- factor(data$Sex)
+data$Cabin <- factor(data$Cabin)
+data$Embarked <- factor(data$Embarked)
 
 
-#install.packages("caret", "ellipse")
-library(caret)
-library(ellipse)
-train.complete <- train[complete.cases(train), ]
-table(train.complete[, c("Survived")])
-featurePlot(train.complete[
-  ,sapply(names(train.complete),
-          function(n) { is.numeric(train.complete[,n]) })], 
-  train.complete[, c("Survived")], 
-  "ellipse"
-)
+# 3. EDA(íƒìƒ‰ì  ë°ì´í„° ë¶„ì„)
+str(data)
+names(data)
 
-mosaicplot(Survived ~ Pclass + Sex, data=train, color=TRUE, main="Pclass & Sex")
-round(xtabs(Survived=="survived" ~ Sex + Pclass, data=train) / xtabs(~ Sex + Pclass, data=train), 2)
+## 1) ê²°ì¸¡ì§€ ì—¬ë¶€ í™•ì¸
+gg_miss_var(data[,-(which(names(data)=='Survived'))])
+aggr(data[,-(which(names(data)=='Survived'))], prop=FALSE, combined=TRUE, numbers=TRUE, 
+     sortVars=TRUE, sortCombs=TRUE)
 
-# ¸ğµ¨¸µ
-#install.packages("rpart", "rpart.plot")
-library(rpart)
-library(rpart.plot)
+## 2) Survived ì™€ì˜ ê´€ê³„ í™•ì¸
+### (1) Age
+### - íŠ¹ì´ì‚¬í•­ : NA ê°’ ìˆìŒ
+summary(data[,"Age"])
+ggplot(data = data, aes(Age)) + 
+  geom_histogram(breaks=seq(0, 80, by=1), col='red', 'fill'= 'skyblue', alpha=.5) +
+  ggtitle('Titanic Passenger`s age histogram') +
+  theme(plot.title=element_text(face='bold', hjust=0.5, size=15, color='black'))
 
-model <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data = train)
-pred <- predict(model, newdata = test, type="class")
-head(pred)
-rpart.plot(model)
+ggplot(data=data[!is.na(data$Survived),], aes(Age,fill=Survived)) +
+  geom_density(alpha=.3) + 
+  ggtitle("Titanic Passenger`s age density plot") +
+  theme(plot.title=element_text(face='bold', hjust=0.5, size=15, color='black'))
+
+### (2) Pclass
+data_pclass_cnt <- sqldf("select Pclass, Survived, count(*) as cnt 
+                          from data 
+                          where Survived not like 'NA' 
+                          group by Survived, Pclass
+                          order by 1, 2")
+data_pclass_cnt
+
+ggplot(data=data_pclass_cnt, aes(x=Pclass, y=cnt, fill=Survived)) +
+  geom_bar(alpha=.5, stat='identity') +
+  geom_text(aes(label=cnt), size=5, position=position_stack(vjust=0.5)) + 
+  ggtitle('Titanic Passenger`s seat class') +
+  theme(plot.title = element_text(face='bold', hjust=0, color='black'))
+rm(data_pclass_cnt)
+
+### (3) Sex
+data_sex_cnt <- sqldf("select Sex, Survived, count(*) as cnt 
+                       from data
+                       where Survived not like 'NA' 
+                       group by Survived, Sex
+                       order by 1, 2")
+data_sex_cnt
+ggplot(data=data_sex_cnt, aes(x=Sex, y=cnt, fill=Survived)) +
+  geom_bar(alpha=.5, stat='identity') +
+  geom_text(aes(label=cnt), size=5, position=position_stack(vjust=0.5)) + 
+  ggtitle('Titanic Passenger`s rate by Sex') +
+  theme(plot.title = element_text(face='bold', hjust=0, color='black'))
+rm(data_sex_cnt)
+
+### (4) Fare
+ggplot(data[!is.na(data$Survived),], aes(Survived, Fare)) +
+  geom_jitter(col='gray') +
+  geom_boxplot(alpha=.5) +
+  ggtitle("Boxplot of passenger`s Fare") +
+  theme(plot.title = element_text(face="bold", hjust=0.5, size=15))
+
+## 3) ì „ì²˜ë¦¬
 
 
-result <- data.frame(test$PassengerId, ifelse(pred=="dead", 0, 1))
-colnames(result) <- c("PassengerId", "Survived")
-write.csv(result, "Data/submission.csv",row.names = F)
 
-# ¼º´É °³¼±
-## 1) randomForest
-#install.packages("randomForest")
-library(randomForest)
-
-model2 <- randomForest(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, 
-                       data = na.exclude(train), ntree=500, importance=TRUE)
-model2
-pred2 <- predict(model, newdata = test)
-result <- data.frame(test$PassengerId, ifelse(pred=="dead", 0, 1))
-colnames(result) <- c("PassengerId", "Survived")
-write.csv(result, "Data/submission3.csv",row.names = F)
