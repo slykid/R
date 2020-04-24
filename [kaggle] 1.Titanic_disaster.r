@@ -12,6 +12,9 @@ library(naniar)
 library(VIM)
 library(sqldf)
 
+# RData 파일 로드
+load("D:/workspace/R/RData/[kaggle] 1.Titanic_disaster.RData")
+
 # 1. 원본 데이터 로드
 train_data <- read.csv("Data/titanic/train.csv")
 test_data <- read.csv("Data/titanic/test.csv")
@@ -112,7 +115,9 @@ data$Fare <- replace(data$Fare, which(is.na(data$Fare)), 0)
 
 ### (2) Embarked
 ### - Embarked 변수의 경우 2개의 NA 값이 있으며, 나머지 범주 중에서 최빈값으로 포함시킴
-data$Embarked <- replace(data$Embarked, which(is.na(data$Embarked)), 
+data$Embarked <- replace(data$Embarked, which(data$Embarked==''), 
                          names(table(data$Embarked)[which.max(table(data$Embarked))]))
+
+### (3) 
 
 
