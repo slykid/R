@@ -106,6 +106,8 @@ ggplot(data[!is.na(data$Survived),], aes(Survived, Fare)) +
   theme(plot.title = element_text(face="bold", hjust=0.5, size=15))
 
 ## 3) 전처리
+summary(data)
+
 ### (1) Fare
 ### - Fare 변수의 경우 na 값이 존재하는 데 금액이라는 수치형 변수이므로 NA를 0으로 변경
 data$Fare <- replace(data$Fare, which(is.na(data$Fare)), 0)
@@ -115,4 +117,183 @@ data$Fare <- replace(data$Fare, which(is.na(data$Fare)), 0)
 data$Embarked <- replace(data$Embarked, which(is.na(data$Embarked)), 
                          names(table(data$Embarked)[which.max(table(data$Embarked))]))
 
+### (3) Age
+### - 사람의 나이가 없는 경우는 없기 때문에 NA인 경우에 대해서는 
+data$Age <- ifelse(is.na(data$Age), round(mean(data$Age, na.rm = T), 2), data$Age)
+
+### (4) 전처리 결과 확인
+summary(data)
+
+
+# 4, 모델링
+##  1) train - test 데이터 분리
+train <- data[1:891,]
+test <- data[892:1309, ]
+
+## 2) submission 생성을 위한 test$PassengerId 추출
+ID <- test$PassengerId
+
+## 3) 모델링에 사용할 샘플 추출
+### 사용 컬럼 : Pclass, Sex, Age, SibSp, Parch, Fare, Embarked, Survived
+### test_sample 은 survived 변수 제외하고 생성
+train_sample <- train %>% select("Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked", "Survived")
+test_sample <- test %>% select("Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked")
+
+## 4) 사용모델 : 의사결정나무 (rpart)
+library(rpart)
+model_rpart <- rpart(formula = Survived ~ ., data=train_sample)
+pred <- predict(model_rpart, newdata = test_sample, type="class")
+
+## 5) submission 생성
+submission1 <- data.frame(ID, pred)
+names(submission1) <- c("PassengerId", "Survived")
+write.csv(submission1, "Result/titanic/submission1.csv", row.names = F)  # Accuracy : 0.77033
+rm(submission1)
+
+# 5. 성능개선
+## 1) 추가 전처리 및 Feature Engineering
+### 아무리 성능이 좋은 모델이더라도, 입력되는 데이터가  별로라면 결과도 별로인 것으로 나옴
+### 데이터의 전처리가 중요하다!
+### 한 번에 처리하기 위해 통합데이터인 data를 사용한다.
+
+### 앞서 살펴 본 EDA를 기반으로 추가적인 유추를 한다.
+### 유추1. 탑승객의 티켓이 동일한 경우, 이름 중 일부(ex. 성)가 같은 경우 가족일 가능성이 높다.
+### 유추2. 남자보다 여자의 생존율이 높기 때문에 이름을 통해 해당 승객이 남자인지 여자인지 파악할 수 있다.
+### 유추3. 나이에 따라 
+
+### 추가 전처리 및 피쳐 엔지니어링 계획
+### (1) 탑승객의 가족 수에 따른 구분 변수 생성(티켓별, 가족구성 수 별)
+### (2) 나이에 대한 그룹 생성
+### (3) 성별 및 직급인 단어만 추출하기
+
+
+### (1) 탑승객의 가족 구성 수에 따른 탑승객 규모 변수 생성
+### - 0보다 큰 값의 개수 확인
+sum(ifelse(data$Parch>0, 1, 0)) # 가족끼리 탑승한 승객 수: 307
+sum(ifelse(data$Parch>0 & data$SibSp>0, 1, 0)) # 가족 중 형제가 있는 승객 수: 206
+
+### - 탑승객의 가족 수를 계산해 가족 규모를 산출
+### - 1인 : Single / 2 ~ 4인 : Small / 5인 이상 : Big 으로 구분
+FamilySize <- data$Parch + data$SibSp + 1
+data$FamilySize <- case_when(FamilySize == 1 ~ "Single",
+                             FamilySize >= 2 & FamilySize < 5 ~ "Small",
+                             FamilySize >= 5 ~ "Big")
+data$FamilySize <- factor(data$FamilySize, levels = c("Single", "Small", "Big"))
+str(data)
+rm(FamilySize)
+
+
+### (2) 티켓 수에 따른 탑승객 규모 변수 생성
+### - 동일 티켓이라면 가족 혹은 일행일 확률이 높음
+### - 1인 : Single / 2 ~ 4인 : Small / 5인 이상 : Big 으로 구분
+ticketCnt <- rep(0, nrow(data))
+ticket_kwd <- unique(data$Ticket)
+for(kwd in ticket_kwd) {
+  idx <- which(data$Ticket == kwd)
+  for(i in idx) {
+    ticketCnt[i] <- length(idx)
+  }
+}
+summary(ticketCnt)
+
+data$TicketSize <- case_when(ticketCnt == 1 ~ "Single",
+                             ticketCnt >= 2 & ticketCnt < 5 ~ "Small",
+                             ticketCnt >= 5 ~ "Big")
+data$TicketSize <- factor(data$TicketSize, levels = c("Single", "Small", "Big"))
+rm(ticketCnt)
+rm(ticket_kwd)
+rm(kwd)
+rm(idx)
+rm(i)
+
+
+### (3) 나이에 대한 그룹 생성
+### - 앞서 수행한 가족 구성원 수에 대한 그룹을 만든 것과 유사하게 수치형 변수인 
+###   나이에 대해서도 그룹으로 나눠보자
+### - 외국의 경우임을 감안해 그룹은 13세 미만을 kid, 13~17세를 teenage, 18~59세를 adult, 60세 이상은 elder 로 
+###   구분하며, Factor 형으로 선언한다.
+data$AgeClass <- case_when(data$Age < 13 ~ "kid",
+                           data$Age >= 13 & data$Age < 18 ~ "teenage",
+                           data$Age >= 18 & data$Age < 60 ~ "adult",
+                           data$Age >= 60 ~ "elder")
+data$AgeClass <- factor(data$AgeClass, levels = c("kid", "teenage", "adult", "elder"))
+str(data)
+
+
+### (4) 성별 및 직급인 단어만 추출하기
+### - 앞서 본 EDA 에서 성별 중 여성의 경우가 남성의 경우보다 생존율이 높았다는 것과, 
+###   이름에 대한 내용 중 Mr., Ms., Captain 등 성별 및 직급에 대한 단어가 포함되어 있다는 것을 확인했다.
+passenger_name <- data$Name
+passenger_name
+name_keyword <- gsub("^.*, (.*?)\\..*$", "\\1", passenger_name)
+# \\1 ~ \\9: BackReference(역참조)를 의미하며, 정규표현식에서 그룹이 존재하는 경우 해당 그룹에 대해 일치하는 
+#            문자열 일부를 의미한다. 
+# 위의 예시에서 그룹은 (.*?)이며, 문자열에서 , 와 .사이에 존재하는 문자열을 가리킨다. 
+unique(name_keyword)
+# "Mr"           "Mrs"          "Miss"         "Master"       "Don"          "Rev"          "Dr"          
+# "Mme"          "Ms"           "Major"        "Lady"         "Sir"          "Mlle"         "Col"         
+# "Capt"         "the Countess" "Jonkheer"     "Dona" 
+
+# 위의 결과 중에서 하나로 합칠 수 있는 것들은 치환해주는 작업을 수행한다.
+name_keyword <- ifelse(name_keyword %in% c("Mlle", "Ms", "Lady", "Dona"), "Miss", name_keyword)  # 미혼인 여성(Mlle : Miss 와 동일 / Dona, Lady : 영애 및 귀부인를 호칭함)
+name_keyword <- ifelse(name_keyword == "Mme", "Mrs", name_keyword) # 기혼인 여성 (Mme : 부인을 의미)
+name_keyword <- ifelse(name_keyword %in% c("Master", "Don", "Rev", "Dr", "Major", "Sir", "Col", "Capt", "the Countess", "Jonkheer"), "Rank", name_keyword) # 직급에 해당하는 호칭칭
+unique(name_keyword) # "Mr"   "Mrs"  "Miss" "Rank"
+data$name_keyword <- name_keyword
+data$name_keyword <- factor(data$name_keyword, levels = c("Mr", "Mrs", "Miss", "Rank"))
+str(data)
+rm(name_keyword)
+rm(passenger_name)
+
+### (5) 추가 작업에 따른 학습용 샘플 수정
+train <- data[1:891,]
+test <- data[892:1309, ]
+
+### 사용 변수 : Survived, Pclass, Sex, Embarked, FamilySize, TicketSize, AgeClass, name_keyword
+### test_sample 의 경우 Survived 는 제외함
+train_sample <- train %>% select("Survived", "Pclass", "Sex", "Embarked", "FamilySize", "TicketSize", "AgeClass", "name_keyword")
+test_sample <- test %>% select("Pclass", "Sex", "Embarked", "FamilySize", "TicketSize", "AgeClass", "name_keyword")
+
+### 사용모델 : 의사결정나무 (rpart)
+model_rpart2 <- rpart(formula = Survived ~ ., data=train_sample)
+pred2 <- predict(model_rpart2, newdata = test_sample, type="class")
+
+### (6) submission 생성
+submission2 <- data.frame(ID, pred2)
+names(submission2) <- c("PassengerId", "Survived")
+write.csv(submission2, "Result/titanic/submission2.csv", row.names = F)  # Accuracy : 0.77990
+rm(submission2)
+
+
+## 2) 학습 모델 변경
+### 의사결정나무의 단점
+### - 노이즈에 취약함
+
+### 사용모델 : RandomForest
+### 사용 데이터는 이전과 동일
+library(randomForest)
+set.seed(1234)
+
+model_rf <- randomForest(Survived ~ ., data=train_sample, ntree=500, importance=T)
+model_rf
+
+### 변수중요도 확인
+importance(model_rf) 
+varImpPlot(model_rf)
+
+### 예측결과 생성
+pred3 <- predict(model_rf, newdata = test_sample, type="class")
+
+### submission 생성
+submission3 <- data.frame(ID, pred3)
+names(submission3) <- c("PassengerId", "Survived")
+write.csv(submission3, "Result/titanic/submission3.csv", row.names = F)  # Accuracy : 0.79904
+rm(submission3)
+
+
+
+## 3) 모델 파라미터 수정
+### 모델 자체에 대한 성능을 향상시키는 방법은 다음과 같다.
+### 모델 성능에 대해 영향도가 높은 변수 선정
+### 모델의 하이퍼파라미터 최적화
 
