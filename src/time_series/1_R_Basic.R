@@ -50,7 +50,7 @@ trend1.ts <- ts(trend1 <- c(1342, 1442, 1252, 1343,
                             1425, 1364, 1256, 1272,
                             1343, 1459, 1412, 1453,
                             1432, 1523, 1623, 1156,
-                            1265, 1734, 1923, 1045), start=c(2016, 1))
+                            1265, 1734, 1923, 1045), start=c(2016, 1), frequency=4)
 plot(trend1.ts, main='Trend Variation Time Series')
 
 ## 2-4. 계절적 추세변동 시계열
@@ -70,7 +70,33 @@ plot(st1.ts, main='Season-Trend Variation Time Series')
 
 # 3. 시계열 데이터 시각화
 ## 3-1. Month Plot
+par(mfrow=c(1, 1))
+monthplot(random1.ts, main='EDA: Random Variation Series', xlab="Quarter: 2016-2020", ylab="Sales")
+monthplot(trend1.ts, main='EDA: Trend Variation Series', xlab="Quarter: 2016-2020", ylab="Sales")
+
+monthplot(season1.ts, main="EDA: Seasonal Variation Series", xlab="Quarter: 2016-2020", ylab="Sales")
+monthplot(st1.ts, main="EDA: Seasonal-Trend Variation Series", xlab="Quarter: 2016-2020", ylab="Sales")
+
+## 3-2. 계절성을 제외한 시각화
+# install.packages('TSA', 'forecast')
+library(TSA)
+library(forecast)
+
+data(airpass)
+plot(airpass, amin='Air Passengers -- Seasonal Adjustment')
+lines(seasadj(decompose(airpass)), col=2, lwd=2)
+
+data(milk)
+plot(milk, main='Milk Sales -- Seasonal Adjustment')
+lines(seasadj(decompose(milk)), col=2, lwd=2)
 
 
+## 3-3. Seasonal Plot
+seasonplot(AirPassengers, col=rainbow(12), year.labels=TRUE)
+ggseasonplot(AirPassengers, year.labels=TRUE, continuous=TRUE)
+
+seasonplot(milk, col=rainbow(12), year.labels=TRUE)
+ggseasonplot(milk, year.labels=TRUE, continuous=TRUE)
 
 
+# 4. 차분(Difference)
