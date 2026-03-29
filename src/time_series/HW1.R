@@ -103,3 +103,6 @@ stu_del_residual <- rstudent(model)
 outliers <- which(abs(stu_del_residual) > 3)
 outliers
 
+
+
+
